@@ -1,0 +1,116 @@
+:root {
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color-scheme: light;
+  color: #2c3e50;
+  background-color: #f0f2f5;
+}
+
+body {
+  margin: 0;
+  display: flex;
+  justify-content: center;
+  min-width: 320px;
+  min-height: 100vh;
+  background-color: #f0f2f5;
+  background-image: radial-gradient(#e1e1e1 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+#root {
+  max-width: 1280px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 1rem;
+  text-align: center;
+}
+
+h1 {
+  font-size: 2em;
+  line-height: 1.1;
+  margin-bottom: 0.25rem;
+  background: linear-gradient(to right, #d35400, #f39c12);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0px 2px 4px rgba(0,0,0,0.1);
+}
+
+.game-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.game-info {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+}
+
+.stat-card {
+  background: #ffffff;
+  padding: 0.5rem 1rem;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  border: 1px solid #e1e4e8;
+  min-width: 100px;
+  transition: transform 0.2s;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+}
+
+.stat-label {
+  font-size: 0.75rem;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+.stat-value {
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: #1e293b;
+}
+
+.turn-indicator {
+  font-size: 1rem;
+  padding: 0.4rem 1.5rem;
+  border-radius: 30px;
+  background: #ffffff;
+  display: inline-block;
+  margin-bottom: 0.5rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  font-weight: 500;
+}
+
+.turn-TIGER {
+  color: #e74c3c;
+  border: 2px solid #e74c3c;
+  background: #fff5f5;
+}
+
+.turn-GOAT {
+  color: #27ae60;
+  border: 2px solid #27ae60;
+  background: #f0fdf4;
+}
+
+.phase-badge {
+  background: #475569;
+  color: #fff;
+  padding: 0.2rem 0.8rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  vertical-align: middle;
+  margin-left: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
