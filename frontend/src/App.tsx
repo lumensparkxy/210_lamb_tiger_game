@@ -75,8 +75,12 @@ function App() {
   const connectWebSocket = (matchId: string) => {
     if (wsRef.current) wsRef.current.close();
     
-    // Connect directly to backend port 8000 to avoid Vite proxy issues
-    const wsUrl = `ws://${window.location.hostname}:8000/ws/${matchId}`;
+    // Determine WebSocket URL based on environment
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    // In development, we connect to port 8000 directly. In production, we use the same host (relative).
+    const host = import.meta.env.DEV ? `${window.location.hostname}:8000` : window.location.host;
+    const wsUrl = `${protocol}//${host}/ws/${matchId}`;
+    
     const ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
