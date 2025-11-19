@@ -33,7 +33,7 @@ COPY backend/ ./backend/
 COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 
 # Cloud Run injects the PORT environment variable
-ENV PORT=8080
+ENV PORT=8000
 
 # Run the application
 # We use shell form to allow $PORT expansion

@@ -3,6 +3,8 @@ version: '3.8'
 services:
   # The Application (Frontend + Backend)
   app:
+    container_name: lamb_tiger_app_v1  # <--- Custom Container Name
+    image: lamb_tiger_game:1.0.0       # <--- Image Name and Version Tag
     build: .
     ports:
       - "8000:8000"
