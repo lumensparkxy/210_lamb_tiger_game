@@ -10,10 +10,13 @@ export interface GameState {
     history: string[];
     winner: "TIGER" | "GOAT" | null;
     winReason: "CAPTURE_LIMIT" | "STALEMATE" | "FORFEIT" | null;
+    tigerPlayerId?: string | null;
+    goatPlayerId?: string | null;
 }
 
 export interface Move {
     player: "TIGER" | "GOAT";
     from_node: number | null;
     to_node: number;
+    playerId: string;
 }

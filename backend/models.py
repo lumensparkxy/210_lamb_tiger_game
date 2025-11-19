@@ -13,8 +13,12 @@ class GameState(BaseModel):
     history: List[str]
     winner: Optional[Literal["TIGER", "GOAT"]] = None
     winReason: Optional[Literal["CAPTURE_LIMIT", "STALEMATE", "FORFEIT"]] = None
+    tigerPlayerId: Optional[str] = None
+    goatPlayerId: Optional[str] = None
 
 class Move(BaseModel):
     player: Literal["TIGER", "GOAT"]
     from_node: Optional[int] = None # None for placement
     to_node: int
+    playerId: str
+

@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  # The Application (Frontend + Backend)
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://user:password@db:5432/lambtigerdb
+    depends_on:
+      - db
+    restart: always
+
+  # The Database
+  db:
+    image: postgres:15-alpine
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=lambtigerdb
+    restart: always
+
+volumes:
+  postgres_data:

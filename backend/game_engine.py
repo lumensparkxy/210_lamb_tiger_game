@@ -104,7 +104,9 @@ class GameEngine:
             goatsKilled=0,
             history=[],
             winner=None,
-            winReason=None
+            winReason=None,
+            tigerPlayerId=None,
+            goatPlayerId=None
         )
 
     def apply_move(self, move: Move):

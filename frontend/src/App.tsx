@@ -1,36 +1,133 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { GameState, Move } from './game/types.ts';
 import { Board } from './components/Board';
+
+function generateUUID() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
 
 function App() {
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [selectedNode, setSelectedNode] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [playerId, setPlayerId] = useState<string>("");
+  const [isCreating, setIsCreating] = useState(false);
+  const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
-    const createGame = async () => {
-      try {
-        const response = await axios.post('/api/games', { variant: "3T-15G-23N" });
-        setGameState(response.data);
-      } catch (error) {
-        console.error("Error creating game:", error);
-      }
+    // 1. Initialize Player ID
+    let storedId = localStorage.getItem("apa_playerId");
+    if (!storedId) {
+      storedId = generateUUID();
+      localStorage.setItem("apa_playerId", storedId);
+    }
+    setPlayerId(storedId);
+
+    // 2. Check URL for Game ID
+    const params = new URLSearchParams(window.location.search);
+    const gameIdFromUrl = params.get("gameId");
+
+    if (gameIdFromUrl) {
+      joinGame(gameIdFromUrl, storedId);
+    } else {
+      setIsCreating(true);
+    }
+
+    return () => {
+      if (wsRef.current) wsRef.current.close();
     };
-    createGame();
   }, []);
+
+  const joinGame = async (matchId: string, pId: string) => {
+    try {
+      const res = await axios.get(`/api/games/${matchId}?playerId=${pId}`);
+      setGameState(res.data);
+      connectWebSocket(matchId);
+      setIsCreating(false);
+    } catch (e) {
+      console.error("Game not found", e);
+      setIsCreating(true);
+      // Clear URL if invalid
+      window.history.pushState({}, '', window.location.pathname);
+    }
+  };
+
+  const createNewGame = async (preferredRole: "TIGER" | "GOAT") => {
+    try {
+      const res = await axios.post('/api/games', { 
+        variant: "3T-15G-23N",
+        playerId: playerId,
+        preferredRole: preferredRole
+      });
+      setGameState(res.data);
+      window.history.pushState({}, '', `?gameId=${res.data.matchId}`);
+      connectWebSocket(res.data.matchId);
+      setIsCreating(false);
+    } catch (e) {
+      console.error("Error creating game", e);
+    }
+  };
+
+  const connectWebSocket = (matchId: string) => {
+    if (wsRef.current) wsRef.current.close();
+    
+    // Connect directly to backend port 8000 to avoid Vite proxy issues
+    const wsUrl = `ws://${window.location.hostname}:8000/ws/${matchId}`;
+    const ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+      console.log("Connected to WebSocket for game:", matchId);
+    };
+
+    ws.onmessage = (event) => {
+      console.log("Received update via WebSocket");
+      const newState = JSON.parse(event.data);
+      setGameState(newState);
+    };
+
+    ws.onerror = (err) => {
+      console.error("WebSocket error:", err);
+    };
+
+    ws.onclose = () => {
+      console.log("WebSocket connection closed");
+    };
+
+    wsRef.current = ws;
+  };
+
+  const getMyRole = (): "TIGER" | "GOAT" | "SPECTATOR" => {
+    if (!gameState) return "SPECTATOR";
+    if (gameState.tigerPlayerId === playerId) return "TIGER";
+    if (gameState.goatPlayerId === playerId) return "GOAT";
+    return "SPECTATOR";
+  };
 
   const handleNodeClick = async (nodeId: number) => {
     if (!gameState) return;
+    
+    const myRole = getMyRole();
+    if (myRole === "SPECTATOR") {
+      setError("You are spectating.");
+      return;
+    }
+    if (gameState.activePlayer !== myRole) {
+      setError(`It is ${gameState.activePlayer}'s turn.`);
+      return;
+    }
+
     setError(null);
 
     const piece = gameState.board[nodeId];
-    // const isMyTurn = true; // Single player for now, or hotseat
 
     if (gameState.phase === "PLACEMENT") {
       if (gameState.activePlayer === "GOAT") {
         if (piece === "E") {
-          await sendMove({ player: "GOAT", from_node: null, to_node: nodeId });
+          await sendMove({ player: "GOAT", from_node: null, to_node: nodeId, playerId });
         }
       } else {
         // Tiger moves during placement
@@ -67,7 +164,8 @@ function App() {
       await sendMove({
         player: gameState.activePlayer,
         from_node: selectedNode,
-        to_node: nodeId
+        to_node: nodeId,
+        playerId
       });
       setSelectedNode(null);
     }
@@ -83,7 +181,32 @@ function App() {
     }
   };
 
+  if (isCreating) {
+    return (
+      <div className="App game-container" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
+        <h1>Aadu Puli Aattam</h1>
+        <p>Create a new game to start playing.</p>
+        <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
+          <button 
+            onClick={() => createNewGame("TIGER")}
+            style={{ padding: '1rem 2rem', fontSize: '1.2rem', background: '#ff9f43', border: 'none', borderRadius: '8px', cursor: 'pointer', color: 'white' }}
+          >
+            Play as Tiger 🐯
+          </button>
+          <button 
+            onClick={() => createNewGame("GOAT")}
+            style={{ padding: '1rem 2rem', fontSize: '1.2rem', background: '#1dd1a1', border: 'none', borderRadius: '8px', cursor: 'pointer', color: 'white' }}
+          >
+            Play as Goat 🐐
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (!gameState) return <div style={{ color: '#888', marginTop: '20vh' }}>Loading Game Engine...</div>;
+
+  const myRole = getMyRole();
 
   return (
     <div className="App game-container">
@@ -92,6 +215,13 @@ function App() {
         <div className={`turn-indicator turn-${gameState.activePlayer}`}>
           Current Turn: <strong>{gameState.activePlayer}</strong>
           <span className="phase-badge">{gameState.phase}</span>
+        </div>
+        <div style={{ marginTop: '0.5rem', fontSize: '0.9rem', color: '#aaa' }}>
+          You are: <strong style={{ color: myRole === 'TIGER' ? '#ff9f43' : myRole === 'GOAT' ? '#1dd1a1' : '#ccc' }}>{myRole}</strong>
+          {myRole === 'SPECTATOR' && " (View Only)"}
+        </div>
+        <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: '#666' }}>
+          Share URL to invite opponent
         </div>
       </header>
 
