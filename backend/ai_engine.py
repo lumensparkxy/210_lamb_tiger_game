@@ -9,7 +9,7 @@ class AIEngine:
 
     def get_best_move(self, state: GameState) -> Move:
         player = state.activePlayer
-        depth = 3
+        depth = 2  # Depth can be adjusted for difficulty
         
         best_score = float('-inf')
         best_move = None
