@@ -185,6 +185,28 @@ function App() {
     }
   };
 
+  const handleShare = async () => {
+    const url = window.location.href;
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'Aadu Puli Aattam',
+          text: `Join my game! I am playing as ${getMyRole() === 'TIGER' ? 'Tiger' : 'Goat'}.`,
+          url: url
+        });
+      } catch (err) {
+        console.log('Share canceled or failed', err);
+      }
+    } else {
+      try {
+        await navigator.clipboard.writeText(url);
+        alert("Link copied to clipboard!"); 
+      } catch (err) {
+        console.error('Failed to copy: ', err);
+      }
+    }
+  };
+
   if (isCreating) {
     return (
       <div className="App game-container" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
@@ -224,9 +246,30 @@ function App() {
           You are: <strong style={{ color: myRole === 'TIGER' ? '#ff9f43' : myRole === 'GOAT' ? '#1dd1a1' : '#ccc' }}>{myRole}</strong>
           {myRole === 'SPECTATOR' && " (View Only)"}
         </div>
-        <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: '#666' }}>
-          Share URL to invite opponent
-        </div>
+        <button 
+          onClick={handleShare}
+          style={{ 
+            marginTop: '1rem', 
+            marginLeft: 'auto',
+            marginRight: 'auto',
+            cursor: 'pointer',
+            display: 'inline-flex', 
+            alignItems: 'center', 
+            gap: '0.5rem',
+            padding: '0.6rem 1.2rem',
+            background: 'rgba(100, 108, 255, 0.1)',
+            borderRadius: '20px',
+            border: '1px solid rgba(100, 108, 255, 0.2)',
+            fontSize: '0.9rem',
+            color: '#646cff',
+            fontWeight: '600',
+            transition: 'all 0.2s'
+          }}
+          title="Click to share game link"
+        >
+          <span>Share to Play ⚔️</span>
+          <span>🔗</span>
+        </button>
       </header>
 
       <div className="game-info">

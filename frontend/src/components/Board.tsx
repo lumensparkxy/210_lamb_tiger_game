@@ -48,9 +48,9 @@ export const Board: React.FC<BoardProps> = ({ gameState, onNodeClick, selectedNo
             
             let content = null;
             if (piece === "T") {
-                content = <text x={pos.x} y={pos.y} dy="6" textAnchor="middle" fontSize="18" style={{ pointerEvents: 'none' }}>🐯</text>;
+                content = <text x={pos.x} y={pos.y} dy="4" textAnchor="middle" fontSize="12" style={{ pointerEvents: 'none' }}>🐯</text>;
             } else if (piece === "G") {
-                content = <text x={pos.x} y={pos.y} dy="6" textAnchor="middle" fontSize="18" style={{ pointerEvents: 'none' }}>🐐</text>;
+                content = <text x={pos.x} y={pos.y} dy="4" textAnchor="middle" fontSize="12" style={{ pointerEvents: 'none' }}>🐐</text>;
             }
             
             return (
@@ -82,7 +82,7 @@ export const Board: React.FC<BoardProps> = ({ gameState, onNodeClick, selectedNo
     };
 
     return (
-        <svg viewBox="-20 -10 140 120" style={{ width: '100%', maxWidth: '1200px', margin: '0 auto', display: 'block' }}>
+        <svg viewBox="-15 -5 130 110" style={{ width: '100%', height: '100%', margin: '0 auto', display: 'block' }}>
             {renderLines()}
             {renderNodes()}
         </svg>

@@ -1,6 +1,6 @@
 # Stage 1: Build the Frontend
 # We use a Node.js image to build the React application
-FROM node:20-alpine as frontend-builder
+FROM node:20-alpine AS frontend-builder
 
 WORKDIR /app/frontend
 
@@ -36,5 +36,4 @@ COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 ENV PORT=8000
 
 # Run the application
-# We use shell form to allow $PORT expansion
-CMD uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
