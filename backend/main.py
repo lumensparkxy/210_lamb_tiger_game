@@ -7,6 +7,7 @@ import os
 from pydantic import BaseModel
 from typing import List, Optional, Literal, Dict
 from backend.game_engine import GameEngine
+from backend.ai_engine import AIEngine
 from backend.models import GameState, Move
 
 app = FastAPI(title="Aadu Puli Aattam Engine")
@@ -21,6 +22,7 @@ app.add_middleware(
 
 # In-memory store for games
 games: Dict[str, GameEngine] = {}
+ai_engine = AIEngine()
 
 class ConnectionManager:
     def __init__(self):
@@ -54,6 +56,7 @@ class CreateGameRequest(BaseModel):
     variant: Literal["3T-15G-23N"] = "3T-15G-23N"
     playerId: str
     preferredRole: Optional[Literal["TIGER", "GOAT"]] = None
+    vsAI: bool = False
 
 @app.post("/api/games", response_model=GameState)
 def create_game(request: CreateGameRequest):
@@ -62,11 +65,25 @@ def create_game(request: CreateGameRequest):
     # Assign creator role
     if request.preferredRole == "TIGER":
         game.state.tigerPlayerId = request.playerId
+        if request.vsAI:
+            game.state.goatPlayerId = "AI"
     elif request.preferredRole == "GOAT":
         game.state.goatPlayerId = request.playerId
+        if request.vsAI:
+            game.state.tigerPlayerId = "AI"
     else:
         # Default to GOAT if not specified (or random)
         game.state.goatPlayerId = request.playerId
+        if request.vsAI:
+            game.state.tigerPlayerId = "AI"
+
+    # If AI is assigned and it's AI's turn, make a move
+    if request.vsAI:
+        if (game.state.activePlayer == "TIGER" and game.state.tigerPlayerId == "AI") or \
+           (game.state.activePlayer == "GOAT" and game.state.goatPlayerId == "AI"):
+            ai_move = ai_engine.get_best_move(game.state)
+            if ai_move:
+                game.apply_move(ai_move)
 
     games[game.state.matchId] = game
     return game.state
@@ -114,6 +131,22 @@ async def make_move(match_id: str, move: Move):
         game.apply_move(move)
         # Broadcast update
         await manager.broadcast(match_id, jsonable_encoder(game.state))
+        
+        # Check if next player is AI
+        next_player = game.state.activePlayer
+        is_ai_turn = False
+        if next_player == "TIGER" and game.state.tigerPlayerId == "AI":
+            is_ai_turn = True
+        elif next_player == "GOAT" and game.state.goatPlayerId == "AI":
+            is_ai_turn = True
+            
+        if is_ai_turn and not game.state.winner:
+            # AI Turn
+            ai_move = ai_engine.get_best_move(game.state)
+            if ai_move:
+                game.apply_move(ai_move)
+                await manager.broadcast(match_id, jsonable_encoder(game.state))
+
         return game.state
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
