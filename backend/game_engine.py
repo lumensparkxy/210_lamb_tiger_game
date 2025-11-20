@@ -1,7 +1,44 @@
 import uuid
 import math
+import random
 from typing import List, Dict, Optional, Tuple
 from backend.models import GameState, Move
+
+# Zobrist Hashing Constants
+# We need random 64-bit integers for:
+# - Each piece type at each position (23 positions * 2 types)
+# - Active player (2)
+# - Goats in hand (0-15)
+# - Goats killed (0-5)
+
+def _generate_zobrist_keys():
+    keys = {
+        "PIECES": {},
+        "TURN": {},
+        "GOATS_HAND": {},
+        "GOATS_KILLED": {}
+    }
+    
+    # Pieces: (node_index, piece_type) -> random_int
+    for i in range(23):
+        keys["PIECES"][(i, "T")] = random.getrandbits(64)
+        keys["PIECES"][(i, "G")] = random.getrandbits(64)
+        
+    # Turn
+    keys["TURN"]["TIGER"] = random.getrandbits(64)
+    keys["TURN"]["GOAT"] = random.getrandbits(64)
+    
+    # Goats in Hand
+    for i in range(16):
+        keys["GOATS_HAND"][i] = random.getrandbits(64)
+        
+    # Goats Killed
+    for i in range(6):
+        keys["GOATS_KILLED"][i] = random.getrandbits(64)
+        
+    return keys
+
+ZOBRIST_KEYS = _generate_zobrist_keys()
 
 # Node coordinates for the 23-node board (Custom Variant)
 # Calculated based on a perspective "Fan" projection where lines diverge from Node 0 (or virtual apex).
@@ -96,6 +133,17 @@ class GameEngine:
         board[1] = "T"
         board[2] = "T"
         
+        # Calculate Initial Zobrist Hash
+        h = 0
+        h ^= ZOBRIST_KEYS["PIECES"][(0, "T")]
+        h ^= ZOBRIST_KEYS["PIECES"][(1, "T")]
+        h ^= ZOBRIST_KEYS["PIECES"][(2, "T")]
+        h ^= ZOBRIST_KEYS["TURN"]["GOAT"]
+        h ^= ZOBRIST_KEYS["GOATS_HAND"][15]
+        h ^= ZOBRIST_KEYS["GOATS_KILLED"][0]
+        
+        zobrist_hash_hex = hex(h)
+        
         return GameState(
             matchId=str(uuid.uuid4()),
             variant=variant,
@@ -105,7 +153,8 @@ class GameEngine:
             board=board,
             goatsInHand=15,
             goatsKilled=0,
-            history=[],
+            history=[zobrist_hash_hex],
+            zobristHash=zobrist_hash_hex,
             winner=None,
             winReason=None,
             tigerPlayerId=None,
@@ -150,29 +199,61 @@ class GameEngine:
         if move.player != self.state.activePlayer:
             raise ValueError(f"Not {move.player}'s turn")
 
-        if self.state.phase == "PLACEMENT":
-            self._handle_placement(move)
-        elif self.state.phase == "MOVEMENT":
-            self._handle_movement(move)
-        
-        self._check_win_condition()
-        self._toggle_turn()
+        # Backup state for rollback
+        try:
+            backup_state = self.state.model_copy(deep=True)
+        except AttributeError:
+            import copy
+            backup_state = self.state.copy(deep=True)
+
+        try:
+            if self.state.phase == "PLACEMENT":
+                self._handle_placement(move)
+            elif self.state.phase == "MOVEMENT":
+                self._handle_movement(move)
+            
+            self._check_win_condition()
+            self._toggle_turn()
+            
+            # Check Repetition (Superko)
+            if self.state.history.count(self.state.zobristHash) >= 2:
+                self.state.phase = "GAME_OVER"
+                self.state.winReason = "REPETITION"
+                # Winner remains None (Draw)
+            
+            self.state.history.append(self.state.zobristHash)
+            
+        except ValueError as e:
+            self.state = backup_state
+            raise e
 
     def _handle_placement(self, move: Move):
+        h = int(self.state.zobristHash, 16)
+
         if move.player == "GOAT":
             if move.from_node is not None:
                 raise ValueError("Goats cannot move during placement, only place")
             if self.state.board[move.to_node] != "E":
                 raise ValueError("Target node is not empty")
             
-            self.state.board[move.to_node] = "G"
+            # Update Hash: Remove old goatsInHand, Add new goatsInHand
+            h ^= ZOBRIST_KEYS["GOATS_HAND"][self.state.goatsInHand]
             self.state.goatsInHand -= 1
+            h ^= ZOBRIST_KEYS["GOATS_HAND"][self.state.goatsInHand]
+
+            self.state.board[move.to_node] = "G"
+            # Update Hash: Add Goat to board
+            h ^= ZOBRIST_KEYS["PIECES"][(move.to_node, "G")]
+            
+            self.state.zobristHash = hex(h)
             
         elif move.player == "TIGER":
             # Tigers can move during placement
             self._handle_movement(move)
 
     def _handle_movement(self, move: Move):
+        h = int(self.state.zobristHash, 16)
+
         if move.from_node is None:
             raise ValueError("Source node required for movement")
         
@@ -186,8 +267,15 @@ class GameEngine:
         # Check Adjacency
         if move.to_node in self.adjacency_map[move.from_node]:
             # Simple Move
+            # Remove piece from source
+            h ^= ZOBRIST_KEYS["PIECES"][(move.from_node, piece)]
             self.state.board[move.from_node] = "E"
-            self.state.board[move.to_node] = "T" if move.player == "TIGER" else "G"
+            
+            # Add piece to target
+            self.state.board[move.to_node] = piece
+            h ^= ZOBRIST_KEYS["PIECES"][(move.to_node, piece)]
+            
+            self.state.zobristHash = hex(h)
             return
 
         # Check Jump (Tiger only)
@@ -196,10 +284,24 @@ class GameEngine:
                 if start == move.from_node and land == move.to_node:
                     if self.state.board[over] == "G":
                         # Valid Kill
+                        # Remove Tiger from source
+                        h ^= ZOBRIST_KEYS["PIECES"][(move.from_node, "T")]
                         self.state.board[move.from_node] = "E"
+                        
+                        # Remove Goat from over
+                        h ^= ZOBRIST_KEYS["PIECES"][(over, "G")]
                         self.state.board[over] = "E" # Remove Goat
+                        
+                        # Add Tiger to target
+                        h ^= ZOBRIST_KEYS["PIECES"][(move.to_node, "T")]
                         self.state.board[move.to_node] = "T"
+                        
+                        # Update Goats Killed
+                        h ^= ZOBRIST_KEYS["GOATS_KILLED"][self.state.goatsKilled]
                         self.state.goatsKilled += 1
+                        h ^= ZOBRIST_KEYS["GOATS_KILLED"][self.state.goatsKilled]
+                        
+                        self.state.zobristHash = hex(h)
                         return
                     else:
                         raise ValueError("Must jump over a Goat")
@@ -208,6 +310,11 @@ class GameEngine:
         raise ValueError("Invalid move")
 
     def _toggle_turn(self):
+        h = int(self.state.zobristHash, 16)
+        
+        # Remove old turn
+        h ^= ZOBRIST_KEYS["TURN"][self.state.activePlayer]
+
         if self.state.phase == "PLACEMENT":
             if self.state.goatsInHand == 0:
                 self.state.phase = "MOVEMENT"
@@ -218,6 +325,11 @@ class GameEngine:
                 pass
         
         self.state.activePlayer = "TIGER" if self.state.activePlayer == "GOAT" else "GOAT"
+        
+        # Add new turn
+        h ^= ZOBRIST_KEYS["TURN"][self.state.activePlayer]
+        
+        self.state.zobristHash = hex(h)
 
     def _check_win_condition(self):
         if self.state.goatsKilled >= 5:

@@ -14,6 +14,13 @@
 			"command": "cd frontend && npm run dev",
 			"isBackground": true,
 			"group": "test"
+		},
+		{
+			"label": "Deploy to Azure",
+			"type": "shell",
+			"command": "docker build --platform linux/amd64 --tag maswadkar/lamb-tiger:latest --push . && az webapp restart --resource-group rg-lamb-tiger --name lamb-tiger-game",
+			"group": "build",
+			"problemMatcher": []
 		}
 	]
 }

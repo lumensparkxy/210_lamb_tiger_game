@@ -11,8 +11,9 @@ class GameState(BaseModel):
     goatsInHand: int
     goatsKilled: int
     history: List[str]
+    zobristHash: str
     winner: Optional[Literal["TIGER", "GOAT"]] = None
-    winReason: Optional[Literal["CAPTURE_LIMIT", "STALEMATE", "FORFEIT"]] = None
+    winReason: Optional[Literal["CAPTURE_LIMIT", "STALEMATE", "FORFEIT", "REPETITION"]] = None
     tigerPlayerId: Optional[str] = None
     goatPlayerId: Optional[str] = None
 
