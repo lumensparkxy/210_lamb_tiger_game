@@ -56,12 +56,13 @@ function App() {
     }
   };
 
-  const createNewGame = async (preferredRole: "TIGER" | "GOAT") => {
+  const createNewGame = async (preferredRole: "TIGER" | "GOAT", vsAI: boolean = false) => {
     try {
       const res = await axios.post('/api/games', { 
         variant: "3T-15G-23N",
         playerId: playerId,
-        preferredRole: preferredRole
+        preferredRole: preferredRole,
+        vsAI: vsAI
       });
       setGameState(res.data);
       window.history.pushState({}, '', `?gameId=${res.data.matchId}`);
@@ -207,24 +208,54 @@ function App() {
     }
   };
 
+  const returnToHome = () => {
+    setGameState(null);
+    setSelectedNode(null);
+    setError(null);
+    setIsCreating(true);
+    window.history.pushState({}, '', window.location.pathname);
+  };
+
   if (isCreating) {
     return (
       <div className="App game-container" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
         <h1>Aadu Puli Aattam</h1>
         <p>Create a new game to start playing.</p>
-        <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
-          <button 
-            onClick={() => createNewGame("TIGER")}
-            style={{ padding: '1rem 2rem', fontSize: '1.2rem', background: '#ff9f43', border: 'none', borderRadius: '8px', cursor: 'pointer', color: 'white' }}
-          >
-            Play as Tiger 🐯
-          </button>
-          <button 
-            onClick={() => createNewGame("GOAT")}
-            style={{ padding: '1rem 2rem', fontSize: '1.2rem', background: '#1dd1a1', border: 'none', borderRadius: '8px', cursor: 'pointer', color: 'white' }}
-          >
-            Play as Goat 🐐
-          </button>
+        
+        <div style={{ marginBottom: '2rem', textAlign: 'center' }}>
+            <h3>Play vs Human</h3>
+            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
+              <button 
+                onClick={() => createNewGame("TIGER", false)}
+                style={{ padding: '1rem 2rem', fontSize: '1.2rem', background: '#ff9f43', border: 'none', borderRadius: '8px', cursor: 'pointer', color: 'white' }}
+              >
+                Play as Tiger 🐯
+              </button>
+              <button 
+                onClick={() => createNewGame("GOAT", false)}
+                style={{ padding: '1rem 2rem', fontSize: '1.2rem', background: '#1dd1a1', border: 'none', borderRadius: '8px', cursor: 'pointer', color: 'white' }}
+              >
+                Play as Goat 🐐
+              </button>
+            </div>
+        </div>
+
+        <div style={{ textAlign: 'center' }}>
+            <h3>Play vs AI</h3>
+            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
+              <button 
+                onClick={() => createNewGame("TIGER", true)}
+                style={{ padding: '1rem 2rem', fontSize: '1.2rem', background: '#d35400', border: 'none', borderRadius: '8px', cursor: 'pointer', color: 'white' }}
+              >
+                Tiger vs AI 🤖
+              </button>
+              <button 
+                onClick={() => createNewGame("GOAT", true)}
+                style={{ padding: '1rem 2rem', fontSize: '1.2rem', background: '#16a085', border: 'none', borderRadius: '8px', cursor: 'pointer', color: 'white' }}
+              >
+                Goat vs AI 🤖
+              </button>
+            </div>
         </div>
       </div>
     );
@@ -291,10 +322,31 @@ function App() {
             border: '1px solid gold', 
             padding: '1rem', 
             borderRadius: '8px',
-            marginBottom: '1rem'
+            marginBottom: '1rem',
+            textAlign: 'center'
         }}>
           <h2 style={{ color: 'gold', margin: 0 }}>🏆 {gameState.winner} Wins! 🏆</h2>
-          <p style={{ margin: '0.5rem 0 0', color: '#ccc' }}>Reason: {gameState.winReason}</p>
+          <p style={{ margin: '0.5rem 0 1rem', color: '#ccc' }}>Reason: {gameState.winReason}</p>
+          
+          <button
+            onClick={returnToHome}
+            style={{
+                padding: '0.8rem 1.5rem',
+                fontSize: '1rem',
+                background: '#646cff',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontWeight: 'bold',
+                boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+                transition: 'transform 0.1s'
+            }}
+            onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.95)'}
+            onMouseUp={(e) => e.currentTarget.style.transform = 'scale(1)'}
+          >
+            🏠 Return to Home
+          </button>
         </div>
       )}
       

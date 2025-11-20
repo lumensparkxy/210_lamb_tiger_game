@@ -61,10 +61,13 @@ JUMP_LINES = [
 ]
 
 class GameEngine:
-    def __init__(self, variant: str = "3T-15G-23N"):
+    def __init__(self, variant: str = "3T-15G-23N", state: Optional[GameState] = None):
         self.adjacency_map = ADJACENCY_MAP
         self.jump_table = self._build_jump_table()
-        self.state = self._initialize_state(variant)
+        if state:
+            self.state = state
+        else:
+            self.state = self._initialize_state(variant)
 
     def _build_adjacency_map(self) -> Dict[int, List[int]]:
         return ADJACENCY_MAP
@@ -108,6 +111,37 @@ class GameEngine:
             tigerPlayerId=None,
             goatPlayerId=None
         )
+
+    def get_valid_moves(self, player: str) -> List[Move]:
+        moves = []
+        board = self.state.board
+        
+        if self.state.phase == "PLACEMENT" and player == "GOAT":
+            # Goats place on any empty spot
+            for i, piece in enumerate(board):
+                if piece == "E":
+                    moves.append(Move(player="GOAT", from_node=None, to_node=i, playerId="AI"))
+            return moves
+
+        # Movement Phase (or Tiger during Placement)
+        # Identify pieces for the player
+        piece_type = "T" if player == "TIGER" else "G"
+        player_pieces = [i for i, x in enumerate(board) if x == piece_type]
+
+        for start_node in player_pieces:
+            # 1. Adjacent Moves
+            for neighbor in self.adjacency_map[start_node]:
+                if board[neighbor] == "E":
+                    moves.append(Move(player=player, from_node=start_node, to_node=neighbor, playerId="AI"))
+            
+            # 2. Jumps (Tiger only)
+            if player == "TIGER":
+                for start, over, land in self.jump_table:
+                    if start == start_node:
+                        if board[over] == "G" and board[land] == "E":
+                            moves.append(Move(player="TIGER", from_node=start_node, to_node=land, playerId="AI"))
+        
+        return moves
 
     def apply_move(self, move: Move):
         if self.state.winner:
