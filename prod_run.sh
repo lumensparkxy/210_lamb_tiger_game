@@ -5,6 +5,12 @@ set -e
 
 echo "🚀 Starting Deployment Script..."
 
+# Activate virtual environment if it exists
+if [ -d ".venv" ]; then
+    echo "🔌 Activating virtual environment..."
+    source .venv/bin/activate
+fi
+
 # 1. Build Frontend
 echo "📦 Building Frontend..."
 cd frontend
@@ -26,4 +32,4 @@ echo "🔥 Starting Server..."
 # In production, you might want to use gunicorn with uvicorn workers:
 # gunicorn -w 4 -k uvicorn.workers.UvicornWorker backend.main:app
 # But for a small app, uvicorn is sufficient.
-python -m uvicorn backend.main:app --host 0.0.0.0 --port 8000
+python3 -m uvicorn backend.main:app --host 0.0.0.0 --port 8000

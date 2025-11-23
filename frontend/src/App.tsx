@@ -1,14 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { auth } from './firebase';
+import Login from './components/Login';
 import { GameState, Move } from './game/types.ts';
 import { Board } from './components/Board';
-
-function generateUUID() {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
-    return v.toString(16);
-  });
-}
 
 function App() {
   const [gameState, setGameState] = useState<GameState | null>(null);
@@ -16,31 +12,45 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [playerId, setPlayerId] = useState<string>("");
   const [isCreating, setIsCreating] = useState(false);
+  const [loadingAuth, setLoadingAuth] = useState(true);
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
-    // 1. Initialize Player ID
-    let storedId = localStorage.getItem("apa_playerId");
-    if (!storedId) {
-      storedId = generateUUID();
-      localStorage.setItem("apa_playerId", storedId);
-    }
-    setPlayerId(storedId);
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setPlayerId(user.uid);
+      } else {
+        setPlayerId("");
+        setGameState(null);
+      }
+      setLoadingAuth(false);
+    });
 
-    // 2. Check URL for Game ID
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (!playerId) return;
+
+    // Check URL for Game ID once we have a player ID
     const params = new URLSearchParams(window.location.search);
     const gameIdFromUrl = params.get("gameId");
 
     if (gameIdFromUrl) {
-      joinGame(gameIdFromUrl, storedId);
+      joinGame(gameIdFromUrl, playerId);
     } else {
       setIsCreating(true);
     }
+  }, [playerId]);
 
-    return () => {
-      if (wsRef.current) wsRef.current.close();
-    };
-  }, []);
+  const handleSignOut = async () => {
+    try {
+      await signOut(auth);
+      window.location.href = "/"; // Reset URL
+    } catch (error) {
+      console.error("Error signing out", error);
+    }
+  };
 
   const joinGame = async (matchId: string, pId: string) => {
     try {
@@ -216,13 +226,32 @@ function App() {
     window.history.pushState({}, '', window.location.pathname);
   };
 
-  if (isCreating) {
+  if (loadingAuth) {
+    return <div style={{ color: '#888', marginTop: '20vh', textAlign: 'center' }}>Loading...</div>;
+  }
+
+  // If not logged in, we show the Login popup over the Home screen
+  const showLogin = !playerId;
+
+  if (isCreating || showLogin) {
     return (
       <div className="App game-container" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
+        {showLogin && <Login />}
+        
+        <div style={{ position: 'absolute', top: '1rem', right: '1rem' }}>
+          {playerId && (
+            <button 
+              onClick={handleSignOut}
+              style={{ padding: '0.5rem 1rem', background: 'transparent', border: '1px solid #ccc', borderRadius: '4px', color: '#ccc', cursor: 'pointer' }}
+            >
+              Sign Out
+            </button>
+          )}
+        </div>
         <h1>Aadu Puli Aattam</h1>
         <p>Create a new game to start playing.</p>
         
-        <div style={{ marginBottom: '2rem', textAlign: 'center' }}>
+        <div style={{ marginBottom: '2rem', textAlign: 'center', opacity: showLogin ? 0.5 : 1, pointerEvents: showLogin ? 'none' : 'auto' }}>
             <h3>Play vs Human</h3>
             <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
               <button 
@@ -268,7 +297,15 @@ function App() {
   return (
     <div className="App game-container">
       <header>
-        <h1>Aadu Puli Aattam</h1>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+          <h1>Aadu Puli Aattam</h1>
+          <button 
+            onClick={handleSignOut}
+            style={{ padding: '0.5rem 1rem', background: 'transparent', border: '1px solid #ccc', borderRadius: '4px', color: '#ccc', cursor: 'pointer', fontSize: '0.8rem' }}
+          >
+            Sign Out
+          </button>
+        </div>
         <div className={`turn-indicator turn-${gameState.activePlayer}`}>
           Current Turn: <strong>{gameState.activePlayer}</strong>
           <span className="phase-badge">{gameState.phase}</span>
