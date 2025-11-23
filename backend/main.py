@@ -52,6 +52,63 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
+class MatchmakingQueue:
+    def __init__(self):
+        self.queue: List[Dict] = [] # List of {"websocket": WebSocket, "playerId": str}
+
+    async def add_player(self, websocket: WebSocket, player_id: str):
+        await websocket.accept()
+        # Check if player is already in queue to avoid duplicates
+        if any(p["playerId"] == player_id for p in self.queue):
+             # If same socket, ignore. If different, maybe remove old? 
+             # For now, let's just append. The disconnect handler will clean up.
+             pass
+             
+        self.queue.append({"websocket": websocket, "playerId": player_id})
+        print(f"Player {player_id} added to matchmaking queue. Queue size: {len(self.queue)}")
+        await self.check_match()
+
+    def remove_player(self, websocket: WebSocket):
+        self.queue = [p for p in self.queue if p["websocket"] != websocket]
+        print(f"Player removed from matchmaking queue. Queue size: {len(self.queue)}")
+
+    async def check_match(self):
+        if len(self.queue) >= 2:
+            player1 = self.queue.pop(0)
+            player2 = self.queue.pop(0)
+            
+            # Create Game
+            game = GameEngine("3T-15G-23N")
+            game.state.tigerPlayerId = player1["playerId"]
+            game.state.goatPlayerId = player2["playerId"]
+            games[game.state.matchId] = game
+            
+            print(f"Match found! {game.state.matchId}: {player1['playerId']} vs {player2['playerId']}")
+
+            # Notify Player 1
+            try:
+                await player1["websocket"].send_json({
+                    "status": "MATCH_FOUND",
+                    "matchId": game.state.matchId,
+                    "role": "TIGER"
+                })
+                await player1["websocket"].close()
+            except Exception as e:
+                print(f"Error notifying player 1: {e}")
+
+            # Notify Player 2
+            try:
+                await player2["websocket"].send_json({
+                    "status": "MATCH_FOUND",
+                    "matchId": game.state.matchId,
+                    "role": "GOAT"
+                })
+                await player2["websocket"].close()
+            except Exception as e:
+                print(f"Error notifying player 2: {e}")
+
+matchmaking_queue = MatchmakingQueue()
+
 class CreateGameRequest(BaseModel):
     variant: Literal["3T-15G-23N"] = "3T-15G-23N"
     playerId: str
@@ -89,7 +146,7 @@ def create_game(request: CreateGameRequest):
     return game.state
 
 @app.get("/api/games/{match_id}", response_model=GameState)
-def get_game(match_id: str, playerId: Optional[str] = None):
+async def get_game(match_id: str, playerId: Optional[str] = None):
     if match_id not in games:
         raise HTTPException(status_code=404, detail="Game not found")
     
@@ -102,13 +159,19 @@ def get_game(match_id: str, playerId: Optional[str] = None):
             pass # Already assigned
         else:
             # Try to assign empty slots
+            assigned = False
             if game.state.tigerPlayerId is None:
                 game.state.tigerPlayerId = playerId
+                assigned = True
             elif game.state.goatPlayerId is None:
                 game.state.goatPlayerId = playerId
+                assigned = True
             else:
                 # Game is full, user is a spectator
                 pass
+            
+            if assigned:
+                await manager.broadcast(match_id, jsonable_encoder(game.state))
 
     return game.state
 
@@ -159,6 +222,15 @@ async def websocket_endpoint(websocket: WebSocket, match_id: str):
             await websocket.receive_text()
     except WebSocketDisconnect:
         manager.disconnect(websocket, match_id)
+
+@app.websocket("/ws/matchmaking/{player_id}")
+async def matchmaking_endpoint(websocket: WebSocket, player_id: str):
+    await matchmaking_queue.add_player(websocket, player_id)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        matchmaking_queue.remove_player(websocket)
 
 # Serve React App (Place this after API routes)
 frontend_dist = os.path.join(os.path.dirname(__file__), "../frontend/dist")

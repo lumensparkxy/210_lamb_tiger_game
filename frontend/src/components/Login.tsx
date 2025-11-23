@@ -4,11 +4,16 @@ import { auth, googleProvider } from '../firebase';
 import './Login.css';
 
 const Login: React.FC = () => {
+  const [error, setError] = React.useState<string | null>(null);
+
   const handleGoogleLogin = async () => {
+    setError(null);
+    console.log("Attempting Google Login...");
     try {
       await signInWithPopup(auth, googleProvider);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error signing in with Google", error);
+      setError(error.message || "Failed to sign in with Google");
     }
   };
 
@@ -22,6 +27,12 @@ const Login: React.FC = () => {
           Join the game to play online, track your stats, and compete on the leaderboard.
         </p>
         
+        {error && (
+          <div style={{ color: 'red', marginBottom: '1rem', padding: '0.5rem', background: '#ffebee', borderRadius: '4px' }}>
+            {error}
+          </div>
+        )}
+
         <button onClick={handleGoogleLogin} className="login-btn">
           <img 
             src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" 

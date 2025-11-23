@@ -13,7 +13,9 @@ function App() {
   const [playerId, setPlayerId] = useState<string>("");
   const [isCreating, setIsCreating] = useState(false);
   const [loadingAuth, setLoadingAuth] = useState(true);
+  const [isMatchmaking, setIsMatchmaking] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
+  const matchmakingWsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -81,6 +83,45 @@ function App() {
     } catch (e) {
       console.error("Error creating game", e);
     }
+  };
+
+  const findMatch = () => {
+    setIsMatchmaking(true);
+    
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = import.meta.env.DEV ? `${window.location.hostname}:8000` : window.location.host;
+    const wsUrl = `${protocol}//${host}/ws/matchmaking/${playerId}`;
+    
+    const ws = new WebSocket(wsUrl);
+    
+    ws.onopen = () => {
+      console.log("Connected to Matchmaking Queue");
+    };
+
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.status === "MATCH_FOUND") {
+        console.log("Match found!", data);
+        setIsMatchmaking(false);
+        // Join the game
+        joinGame(data.matchId, playerId);
+        // Update URL
+        window.history.pushState({}, '', `?gameId=${data.matchId}`);
+      }
+    };
+    
+    ws.onclose = () => {
+      console.log("Matchmaking connection closed");
+    };
+
+    matchmakingWsRef.current = ws;
+  };
+
+  const cancelMatchmaking = () => {
+    if (matchmakingWsRef.current) {
+      matchmakingWsRef.current.close();
+    }
+    setIsMatchmaking(false);
   };
 
   const connectWebSocket = (matchId: string) => {
@@ -253,6 +294,26 @@ function App() {
         
         <div style={{ marginBottom: '2rem', textAlign: 'center', opacity: showLogin ? 0.5 : 1, pointerEvents: showLogin ? 'none' : 'auto' }}>
             <h3>Play vs Human</h3>
+            <div style={{ marginBottom: '1rem' }}>
+              <button 
+                onClick={findMatch}
+                style={{ 
+                  padding: '1rem 2rem', 
+                  fontSize: '1.2rem', 
+                  background: 'linear-gradient(45deg, #6c5ce7, #a29bfe)', 
+                  border: 'none', 
+                  borderRadius: '8px', 
+                  cursor: 'pointer', 
+                  color: 'white', 
+                  width: '100%', 
+                  maxWidth: '300px',
+                  boxShadow: '0 4px 15px rgba(108, 92, 231, 0.3)',
+                  fontWeight: 'bold'
+                }}
+              >
+                🔍 Find Match (Random)
+              </button>
+            </div>
             <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
               <button 
                 onClick={() => createNewGame("TIGER", false)}
@@ -268,6 +329,38 @@ function App() {
               </button>
             </div>
         </div>
+
+        {isMatchmaking && (
+          <div style={{
+              position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+              background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+              backdropFilter: 'blur(5px)'
+          }}>
+              <div style={{ background: 'white', padding: '2.5rem', borderRadius: '16px', textAlign: 'center', maxWidth: '90%', width: '400px', boxShadow: '0 10px 25px rgba(0,0,0,0.2)' }}>
+                  <h2 style={{ marginTop: 0, color: '#2d3436' }}>Searching for Opponent...</h2>
+                  <p style={{ color: '#636e72' }}>Please wait while we find a match for you.</p>
+                  <div className="spinner" style={{ margin: '2rem auto' }}></div>
+                  <button 
+                      onClick={cancelMatchmaking}
+                      style={{ 
+                        padding: '0.8rem 2rem', 
+                        background: '#ff7675', 
+                        color: 'white', 
+                        border: 'none', 
+                        borderRadius: '8px', 
+                        cursor: 'pointer',
+                        fontSize: '1rem',
+                        fontWeight: '600',
+                        transition: 'background 0.2s'
+                      }}
+                      onMouseOver={(e) => e.currentTarget.style.background = '#d63031'}
+                      onMouseOut={(e) => e.currentTarget.style.background = '#ff7675'}
+                  >
+                      Cancel Search
+                  </button>
+              </div>
+          </div>
+        )}
 
         <div style={{ textAlign: 'center' }}>
             <h3>Play vs AI</h3>
