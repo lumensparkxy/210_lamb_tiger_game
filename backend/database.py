@@ -43,8 +43,10 @@ def update_player_stats(player_id: str, role: str, result: str):
         
     # Role specific stats
     prefix = role.lower() # tiger or goat
-    key = f"{prefix}_{result.lower()}s" # tiger_wins, tiger_losses, tiger_draws
-    # Note: "draws" plural, "wins" plural, "losses" plural.
+    
+    # Fix for pluralization: "loss" -> "losses", others add "s"
+    suffix = "losses" if result == "LOSS" else f"{result.lower()}s"
+    key = f"{prefix}_{suffix}"
     
     updates[key] = firestore.Increment(1)
     

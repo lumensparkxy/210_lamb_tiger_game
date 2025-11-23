@@ -3,9 +3,9 @@ import axios from 'axios';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from './firebase';
 import Login from './components/Login';
-import StatsDisplay from './components/StatsDisplay';
 import { GameState, Move } from './game/types.ts';
 import { Board } from './components/Board';
+import Menu from './components/Menu';
 
 function App() {
   const [gameState, setGameState] = useState<GameState | null>(null);
@@ -15,6 +15,7 @@ function App() {
   const [isCreating, setIsCreating] = useState(false);
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [isMatchmaking, setIsMatchmaking] = useState(false);
+  const [user, setUser] = useState<any>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const matchmakingWsRef = useRef<WebSocket | null>(null);
 
@@ -22,8 +23,10 @@ function App() {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         setPlayerId(user.uid);
+        setUser(user);
       } else {
         setPlayerId("");
+        setUser(null);
         setGameState(null);
       }
       setLoadingAuth(false);
@@ -280,22 +283,16 @@ function App() {
       <div className="App game-container" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
         {showLogin && <Login />}
         
-        <div style={{ position: 'absolute', top: '1rem', right: '1rem' }}>
-          {playerId && (
-            <button 
-              onClick={handleSignOut}
-              style={{ padding: '0.5rem 1rem', background: 'transparent', border: '1px solid #ccc', borderRadius: '4px', color: '#ccc', cursor: 'pointer' }}
-            >
-              Sign Out
-            </button>
-          )}
-        </div>
+        {playerId && (
+            <Menu user={user} onLogout={handleSignOut} onShare={handleShare} />
+        )}
+
         <h1>Aadu Puli Aattam</h1>
         <p>Create a new game to start playing.</p>
         
         {playerId && (
             <div style={{ width: '100%', maxWidth: '500px', marginBottom: '2rem' }}>
-                <StatsDisplay playerId={playerId} />
+                {/* Stats are now in the Menu */}
             </div>
         )}
         
@@ -396,15 +393,10 @@ function App() {
 
   return (
     <div className="App game-container">
+      <Menu user={user} onLogout={handleSignOut} onShare={handleShare} />
       <header>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%' }}>
           <h1>Aadu Puli Aattam</h1>
-          <button 
-            onClick={handleSignOut}
-            style={{ padding: '0.5rem 1rem', background: 'transparent', border: '1px solid #ccc', borderRadius: '4px', color: '#ccc', cursor: 'pointer', fontSize: '0.8rem' }}
-          >
-            Sign Out
-          </button>
         </div>
         <div className={`turn-indicator turn-${gameState.activePlayer}`}>
           Current Turn: <strong>{gameState.activePlayer}</strong>
@@ -414,30 +406,6 @@ function App() {
           You are: <strong style={{ color: myRole === 'TIGER' ? '#ff9f43' : myRole === 'GOAT' ? '#1dd1a1' : '#ccc' }}>{myRole}</strong>
           {myRole === 'SPECTATOR' && " (View Only)"}
         </div>
-        <button 
-          onClick={handleShare}
-          style={{ 
-            marginTop: '1rem', 
-            marginLeft: 'auto',
-            marginRight: 'auto',
-            cursor: 'pointer',
-            display: 'inline-flex', 
-            alignItems: 'center', 
-            gap: '0.5rem',
-            padding: '0.6rem 1.2rem',
-            background: 'rgba(100, 108, 255, 0.1)',
-            borderRadius: '20px',
-            border: '1px solid rgba(100, 108, 255, 0.2)',
-            fontSize: '0.9rem',
-            color: '#646cff',
-            fontWeight: '600',
-            transition: 'all 0.2s'
-          }}
-          title="Click to share game link"
-        >
-          <span>Share to Play ⚔️</span>
-          <span>🔗</span>
-        </button>
       </header>
 
       <div className="game-info">

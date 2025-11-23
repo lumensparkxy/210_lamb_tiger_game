@@ -277,12 +277,6 @@ async def matchmaking_endpoint(websocket: WebSocket, player_id: str):
     except WebSocketDisconnect:
         matchmaking_queue.remove_player(websocket)
 
-# Serve React App (Place this after API routes)
-frontend_dist = os.path.join(os.path.dirname(__file__), "../frontend/dist")
-
-if os.path.exists(frontend_dist):
-    app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="static")
-
 def process_game_result(game: GameEngine):
     if getattr(game, "stats_processed", False):
         return
@@ -314,6 +308,15 @@ def get_stats(player_id: str):
             "goat_wins": 0, "goat_losses": 0, "goat_draws": 0
         }
     return stats
+
+# Serve React App (Place this after API routes)
+frontend_dist = os.path.join(os.path.dirname(__file__), "../frontend/dist")
+
+if os.path.exists(frontend_dist):
+    app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="static")
+
+
+
 
 if __name__ == "__main__":
     import uvicorn
