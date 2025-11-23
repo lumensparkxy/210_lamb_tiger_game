@@ -3,6 +3,7 @@ import axios from 'axios';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from './firebase';
 import Login from './components/Login';
+import StatsDisplay from './components/StatsDisplay';
 import { GameState, Move } from './game/types.ts';
 import { Board } from './components/Board';
 
@@ -291,6 +292,12 @@ function App() {
         </div>
         <h1>Aadu Puli Aattam</h1>
         <p>Create a new game to start playing.</p>
+        
+        {playerId && (
+            <div style={{ width: '100%', maxWidth: '500px', marginBottom: '2rem' }}>
+                <StatsDisplay playerId={playerId} />
+            </div>
+        )}
         
         <div style={{ marginBottom: '2rem', textAlign: 'center', opacity: showLogin ? 0.5 : 1, pointerEvents: showLogin ? 'none' : 'auto' }}>
             <h3>Play vs Human</h3>

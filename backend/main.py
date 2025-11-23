@@ -10,6 +10,7 @@ from typing import List, Optional, Literal, Dict
 from backend.game_engine import GameEngine
 from backend.ai_engine import AIEngine
 from backend.models import GameState, Move
+from backend.database import update_player_stats, get_player_stats
 
 app = FastAPI(title="Aadu Puli Aattam Engine")
 
@@ -83,6 +84,7 @@ async def handle_disconnection(match_id: str, player_id: str):
                     game.state.winner = winner
                     game.state.winReason = "OPPONENT_DISCONNECTED"
                     game.state.phase = "GAME_OVER"
+                    process_game_result(game)
                     await manager.broadcast(match_id, jsonable_encoder(game.state))
     else:
         print(f"Player {player_id} reconnected to {match_id}.")
@@ -227,6 +229,10 @@ async def make_move(match_id: str, move: Move):
 
     try:
         game.apply_move(move)
+        
+        if game.state.phase == "GAME_OVER":
+            process_game_result(game)
+
         # Broadcast update
         await manager.broadcast(match_id, jsonable_encoder(game.state))
         
@@ -243,6 +249,8 @@ async def make_move(match_id: str, move: Move):
             ai_move = ai_engine.get_best_move(game.state)
             if ai_move:
                 game.apply_move(ai_move)
+                if game.state.phase == "GAME_OVER":
+                    process_game_result(game)
                 await manager.broadcast(match_id, jsonable_encoder(game.state))
 
         return game.state
@@ -274,6 +282,38 @@ frontend_dist = os.path.join(os.path.dirname(__file__), "../frontend/dist")
 
 if os.path.exists(frontend_dist):
     app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="static")
+
+def process_game_result(game: GameEngine):
+    if getattr(game, "stats_processed", False):
+        return
+    
+    game.stats_processed = True
+    
+    winner = game.state.winner
+    tiger_pid = game.state.tigerPlayerId
+    goat_pid = game.state.goatPlayerId
+    
+    if winner == "TIGER":
+        update_player_stats(tiger_pid, "TIGER", "WIN")
+        update_player_stats(goat_pid, "GOAT", "LOSS")
+    elif winner == "GOAT":
+        update_player_stats(goat_pid, "GOAT", "WIN")
+        update_player_stats(tiger_pid, "TIGER", "LOSS")
+    elif not winner and game.state.phase == "GAME_OVER":
+        # Draw
+        update_player_stats(tiger_pid, "TIGER", "DRAW")
+        update_player_stats(goat_pid, "GOAT", "DRAW")
+
+@app.get("/api/stats/{player_id}")
+def get_stats(player_id: str):
+    stats = get_player_stats(player_id)
+    if stats is None:
+        return {
+            "total_wins": 0, "total_losses": 0, "total_draws": 0,
+            "tiger_wins": 0, "tiger_losses": 0, "tiger_draws": 0,
+            "goat_wins": 0, "goat_losses": 0, "goat_draws": 0
+        }
+    return stats
 
 if __name__ == "__main__":
     import uvicorn
