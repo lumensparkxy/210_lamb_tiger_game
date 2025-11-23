@@ -54,7 +54,7 @@ export const Board: React.FC<BoardProps> = ({ gameState, onNodeClick, selectedNo
             }
             
             return (
-                <g key={id} onClick={() => onNodeClick(id)} style={{ cursor: 'pointer' }}>
+                <g key={id} data-testid={`node-${id}`} onClick={() => onNodeClick(id)} style={{ cursor: 'pointer' }}>
                     {/* Node Circle */}
                     <circle
                         cx={pos.x}
