@@ -1,14 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { auth } from './firebase';
+import Login from './components/Login';
 import { GameState, Move } from './game/types.ts';
 import { Board } from './components/Board';
-
-function generateUUID() {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
-    return v.toString(16);
-  });
-}
+import Menu from './components/Menu';
 
 function App() {
   const [gameState, setGameState] = useState<GameState | null>(null);
@@ -16,31 +13,50 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [playerId, setPlayerId] = useState<string>("");
   const [isCreating, setIsCreating] = useState(false);
+  const [loadingAuth, setLoadingAuth] = useState(true);
+  const [isMatchmaking, setIsMatchmaking] = useState(false);
+  const [user, setUser] = useState<any>(null);
   const wsRef = useRef<WebSocket | null>(null);
+  const matchmakingWsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
-    // 1. Initialize Player ID
-    let storedId = localStorage.getItem("apa_playerId");
-    if (!storedId) {
-      storedId = generateUUID();
-      localStorage.setItem("apa_playerId", storedId);
-    }
-    setPlayerId(storedId);
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setPlayerId(user.uid);
+        setUser(user);
+      } else {
+        setPlayerId("");
+        setUser(null);
+        setGameState(null);
+      }
+      setLoadingAuth(false);
+    });
 
-    // 2. Check URL for Game ID
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (!playerId) return;
+
+    // Check URL for Game ID once we have a player ID
     const params = new URLSearchParams(window.location.search);
     const gameIdFromUrl = params.get("gameId");
 
     if (gameIdFromUrl) {
-      joinGame(gameIdFromUrl, storedId);
+      joinGame(gameIdFromUrl, playerId);
     } else {
       setIsCreating(true);
     }
+  }, [playerId]);
 
-    return () => {
-      if (wsRef.current) wsRef.current.close();
-    };
-  }, []);
+  const handleSignOut = async () => {
+    try {
+      await signOut(auth);
+      window.location.href = "/"; // Reset URL
+    } catch (error) {
+      console.error("Error signing out", error);
+    }
+  };
 
   const joinGame = async (matchId: string, pId: string) => {
     try {
@@ -73,6 +89,45 @@ function App() {
     }
   };
 
+  const findMatch = () => {
+    setIsMatchmaking(true);
+    
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = import.meta.env.DEV ? `${window.location.hostname}:8000` : window.location.host;
+    const wsUrl = `${protocol}//${host}/ws/matchmaking/${playerId}`;
+    
+    const ws = new WebSocket(wsUrl);
+    
+    ws.onopen = () => {
+      console.log("Connected to Matchmaking Queue");
+    };
+
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.status === "MATCH_FOUND") {
+        console.log("Match found!", data);
+        setIsMatchmaking(false);
+        // Join the game
+        joinGame(data.matchId, playerId);
+        // Update URL
+        window.history.pushState({}, '', `?gameId=${data.matchId}`);
+      }
+    };
+    
+    ws.onclose = () => {
+      console.log("Matchmaking connection closed");
+    };
+
+    matchmakingWsRef.current = ws;
+  };
+
+  const cancelMatchmaking = () => {
+    if (matchmakingWsRef.current) {
+      matchmakingWsRef.current.close();
+    }
+    setIsMatchmaking(false);
+  };
+
   const connectWebSocket = (matchId: string) => {
     if (wsRef.current) wsRef.current.close();
     
@@ -80,7 +135,7 @@ function App() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     // In development, we connect to port 8000 directly. In production, we use the same host (relative).
     const host = import.meta.env.DEV ? `${window.location.hostname}:8000` : window.location.host;
-    const wsUrl = `${protocol}//${host}/ws/${matchId}`;
+    const wsUrl = `${protocol}//${host}/ws/${matchId}${playerId ? `?playerId=${playerId}` : ''}`;
     
     const ws = new WebSocket(wsUrl);
 
@@ -216,14 +271,53 @@ function App() {
     window.history.pushState({}, '', window.location.pathname);
   };
 
-  if (isCreating) {
+  if (loadingAuth) {
+    return <div style={{ color: '#888', marginTop: '20vh', textAlign: 'center' }}>Loading...</div>;
+  }
+
+  // If not logged in, we show the Login popup over the Home screen
+  const showLogin = !playerId;
+
+  if (isCreating || showLogin) {
     return (
       <div className="App game-container" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
+        {showLogin && <Login />}
+        
+        {playerId && (
+            <Menu user={user} onLogout={handleSignOut} onShare={handleShare} />
+        )}
+
         <h1>Aadu Puli Aattam</h1>
         <p>Create a new game to start playing.</p>
         
-        <div style={{ marginBottom: '2rem', textAlign: 'center' }}>
+        {playerId && (
+            <div style={{ width: '100%', maxWidth: '500px', marginBottom: '2rem' }}>
+                {/* Stats are now in the Menu */}
+            </div>
+        )}
+        
+        <div style={{ marginBottom: '2rem', textAlign: 'center', opacity: showLogin ? 0.5 : 1, pointerEvents: showLogin ? 'none' : 'auto' }}>
             <h3>Play vs Human</h3>
+            <div style={{ marginBottom: '1rem' }}>
+              <button 
+                onClick={findMatch}
+                style={{ 
+                  padding: '1rem 2rem', 
+                  fontSize: '1.2rem', 
+                  background: 'linear-gradient(45deg, #6c5ce7, #a29bfe)', 
+                  border: 'none', 
+                  borderRadius: '8px', 
+                  cursor: 'pointer', 
+                  color: 'white', 
+                  width: '100%', 
+                  maxWidth: '300px',
+                  boxShadow: '0 4px 15px rgba(108, 92, 231, 0.3)',
+                  fontWeight: 'bold'
+                }}
+              >
+                🔍 Find Match (Random)
+              </button>
+            </div>
             <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
               <button 
                 onClick={() => createNewGame("TIGER", false)}
@@ -239,6 +333,38 @@ function App() {
               </button>
             </div>
         </div>
+
+        {isMatchmaking && (
+          <div style={{
+              position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+              background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+              backdropFilter: 'blur(5px)'
+          }}>
+              <div style={{ background: 'white', padding: '2.5rem', borderRadius: '16px', textAlign: 'center', maxWidth: '90%', width: '400px', boxShadow: '0 10px 25px rgba(0,0,0,0.2)' }}>
+                  <h2 style={{ marginTop: 0, color: '#2d3436' }}>Searching for Opponent...</h2>
+                  <p style={{ color: '#636e72' }}>Please wait while we find a match for you.</p>
+                  <div className="spinner" style={{ margin: '2rem auto' }}></div>
+                  <button 
+                      onClick={cancelMatchmaking}
+                      style={{ 
+                        padding: '0.8rem 2rem', 
+                        background: '#ff7675', 
+                        color: 'white', 
+                        border: 'none', 
+                        borderRadius: '8px', 
+                        cursor: 'pointer',
+                        fontSize: '1rem',
+                        fontWeight: '600',
+                        transition: 'background 0.2s'
+                      }}
+                      onMouseOver={(e) => e.currentTarget.style.background = '#d63031'}
+                      onMouseOut={(e) => e.currentTarget.style.background = '#ff7675'}
+                  >
+                      Cancel Search
+                  </button>
+              </div>
+          </div>
+        )}
 
         <div style={{ textAlign: 'center' }}>
             <h3>Play vs AI</h3>
@@ -267,8 +393,11 @@ function App() {
 
   return (
     <div className="App game-container">
+      <Menu user={user} onLogout={handleSignOut} onShare={handleShare} />
       <header>
-        <h1>Aadu Puli Aattam</h1>
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%' }}>
+          <h1>Aadu Puli Aattam</h1>
+        </div>
         <div className={`turn-indicator turn-${gameState.activePlayer}`}>
           Current Turn: <strong>{gameState.activePlayer}</strong>
           <span className="phase-badge">{gameState.phase}</span>
@@ -277,30 +406,6 @@ function App() {
           You are: <strong style={{ color: myRole === 'TIGER' ? '#ff9f43' : myRole === 'GOAT' ? '#1dd1a1' : '#ccc' }}>{myRole}</strong>
           {myRole === 'SPECTATOR' && " (View Only)"}
         </div>
-        <button 
-          onClick={handleShare}
-          style={{ 
-            marginTop: '1rem', 
-            marginLeft: 'auto',
-            marginRight: 'auto',
-            cursor: 'pointer',
-            display: 'inline-flex', 
-            alignItems: 'center', 
-            gap: '0.5rem',
-            padding: '0.6rem 1.2rem',
-            background: 'rgba(100, 108, 255, 0.1)',
-            borderRadius: '20px',
-            border: '1px solid rgba(100, 108, 255, 0.2)',
-            fontSize: '0.9rem',
-            color: '#646cff',
-            fontWeight: '600',
-            transition: 'all 0.2s'
-          }}
-          title="Click to share game link"
-        >
-          <span>Share to Play ⚔️</span>
-          <span>🔗</span>
-        </button>
       </header>
 
       <div className="game-info">
