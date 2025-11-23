@@ -131,7 +131,7 @@ function App() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     // In development, we connect to port 8000 directly. In production, we use the same host (relative).
     const host = import.meta.env.DEV ? `${window.location.hostname}:8000` : window.location.host;
-    const wsUrl = `${protocol}//${host}/ws/${matchId}`;
+    const wsUrl = `${protocol}//${host}/ws/${matchId}${playerId ? `?playerId=${playerId}` : ''}`;
     
     const ws = new WebSocket(wsUrl);
 

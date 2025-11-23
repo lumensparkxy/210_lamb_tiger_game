@@ -9,7 +9,7 @@ export interface GameState {
     goatsKilled: number;
     history: string[];
     winner: "TIGER" | "GOAT" | null;
-    winReason: "CAPTURE_LIMIT" | "STALEMATE" | "FORFEIT" | null;
+    winReason: "CAPTURE_LIMIT" | "STALEMATE" | "FORFEIT" | "REPETITION" | "OPPONENT_DISCONNECTED" | null;
     tigerPlayerId?: string | null;
     goatPlayerId?: string | null;
 }
