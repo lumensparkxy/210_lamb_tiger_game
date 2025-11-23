@@ -3,27 +3,12 @@ version: '3.8'
 services:
   # The Application (Frontend + Backend)
   app:
-    container_name: lamb_tiger_app_v1  # <--- Custom Container Name
-    image: lamb_tiger_game:1.0.0       # <--- Image Name and Version Tag
+    container_name: lamb_tiger_app_v1
+    image: lamb_tiger_game:1.0.0
     build: .
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=postgresql://user:password@db:5432/lambtigerdb
-    depends_on:
-      - db
+      - PORT=8000
+      # Ensure you mount your firebase key or provide credentials via env vars in production
     restart: always
-
-  # The Database
-  db:
-    image: postgres:15-alpine
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    environment:
-      - POSTGRES_USER=user
-      - POSTGRES_PASSWORD=password
-      - POSTGRES_DB=lambtigerdb
-    restart: always
-
-volumes:
-  postgres_data:

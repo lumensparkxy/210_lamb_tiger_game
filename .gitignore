@@ -1,3 +1,20 @@
 .DS_Store
 .vscode/
 .idea/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+*.env
+
+# Node
+node_modules/
+frontend/dist/
+frontend/coverage/
+
+# Secrets
+backend/firebase_serviceAccountKey.json
