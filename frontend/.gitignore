@@ -26,3 +26,8 @@ yarn-error.log*
 
 # OS
 .DS_Store
+
+# Playwright
+playwright/.auth
+test-results/
+playwright-report/

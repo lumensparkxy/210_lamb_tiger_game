@@ -421,17 +421,19 @@ function App() {
         </div>
       </div>
 
-      {gameState.winner && (
+      {(gameState.winner || gameState.phase === "GAME_OVER") && (
         <div style={{ 
-            background: 'rgba(255, 215, 0, 0.1)', 
-            border: '1px solid gold', 
+            background: gameState.winner ? 'rgba(255, 215, 0, 0.1)' : 'rgba(255, 255, 255, 0.1)', 
+            border: `1px solid ${gameState.winner ? 'gold' : '#ccc'}`, 
             padding: '1rem', 
             borderRadius: '8px',
             marginBottom: '1rem',
             textAlign: 'center'
         }}>
-          <h2 style={{ color: 'gold', margin: 0 }}>🏆 {gameState.winner} Wins! 🏆</h2>
-          <p style={{ margin: '0.5rem 0 1rem', color: '#ccc' }}>Reason: {gameState.winReason}</p>
+          <h2 style={{ color: gameState.winner ? 'gold' : '#ccc', margin: 0 }}>
+            {gameState.winner ? `🏆 ${gameState.winner} Wins! 🏆` : 'Game Over (Draw)'}
+          </h2>
+          <p style={{ margin: '0.5rem 0 1rem', color: '#ccc' }}>Reason: {gameState.winReason || "Game Ended"}</p>
           
           <button
             onClick={returnToHome}
