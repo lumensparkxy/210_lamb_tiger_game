@@ -16,9 +16,16 @@
 			"group": "test"
 		},
 		{
-			"label": "Deploy to Azure",
+			"label": "Build & Push Docker Image",
 			"type": "shell",
-			"command": "docker build --platform linux/amd64 --tag maswadkar/lamb-tiger:latest --push . && az webapp restart --resource-group rg-lamb-tiger --name lamb-tiger-game",
+			"command": "docker build --platform linux/amd64 --tag maswadkar/lamb-tiger:latest --push .",
+			"group": "build",
+			"problemMatcher": []
+		},
+		{
+			"label": "Restart Azure Web App",
+			"type": "shell",
+			"command": "az webapp restart --resource-group rg-lamb-tiger --name lamb-tiger-game",
 			"group": "build",
 			"problemMatcher": []
 		}
