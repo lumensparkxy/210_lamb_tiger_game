@@ -18,3 +18,5 @@ frontend/coverage/
 
 # Secrets
 backend/firebase_serviceAccountKey.json
+.auth/
+
