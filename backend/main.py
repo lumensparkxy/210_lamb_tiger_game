@@ -1,18 +1,54 @@
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.encoders import jsonable_encoder
 import os
 import asyncio
-from pydantic import BaseModel
+import logging
+from pydantic import BaseModel, ValidationError
 from typing import List, Optional, Literal, Dict
 from backend.game_engine import GameEngine
 from backend.ai_engine import AIEngine
 from backend.models import GameState, Move
 from backend.database import update_player_stats, get_player_stats
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
+
 app = FastAPI(title="Aadu Puli Aattam Engine")
+
+
+# Global Exception Handlers
+@app.exception_handler(ValueError)
+async def value_error_handler(request: Request, exc: ValueError):
+    logger.warning(f"ValueError at {request.url}: {exc}")
+    return JSONResponse(
+        status_code=400,
+        content={"detail": str(exc)}
+    )
+
+
+@app.exception_handler(ValidationError)
+async def validation_error_handler(request: Request, exc: ValidationError):
+    logger.warning(f"ValidationError at {request.url}: {exc}")
+    return JSONResponse(
+        status_code=422,
+        content={"detail": exc.errors()}
+    )
+
+
+@app.exception_handler(Exception)
+async def generic_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Unhandled exception at {request.url}: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "An internal server error occurred"}
+    )
 
 app.add_middleware(
     CORSMiddleware,
@@ -37,7 +73,7 @@ class ConnectionManager:
             self.active_connections[match_id] = []
         
         self.active_connections[match_id].append({"ws": websocket, "pid": player_id})
-        print(f"Client connected to {match_id}. Total: {len(self.active_connections[match_id])}")
+        logger.info(f"Client connected to {match_id}. Total: {len(self.active_connections[match_id])}")
 
     def disconnect(self, websocket: WebSocket, match_id: str):
         if match_id in self.active_connections:
@@ -45,7 +81,7 @@ class ConnectionManager:
                 c for c in self.active_connections[match_id] 
                 if c["ws"] != websocket
             ]
-            print(f"Client disconnected from {match_id}. Total: {len(self.active_connections[match_id])}")
+            logger.info(f"Client disconnected from {match_id}. Total: {len(self.active_connections[match_id])}")
 
     def is_player_connected(self, match_id: str, player_id: str) -> bool:
         if match_id not in self.active_connections:
@@ -58,12 +94,12 @@ class ConnectionManager:
                 try:
                     await connection["ws"].send_json(message)
                 except Exception as e:
-                    print(f"Error broadcasting to client: {e}")
+                    logger.error(f"Error broadcasting to client: {e}")
 
 manager = ConnectionManager()
 
 async def handle_disconnection(match_id: str, player_id: str):
-    print(f"Player {player_id} disconnected from {match_id}. Waiting for reconnection...")
+    logger.info(f"Player {player_id} disconnected from {match_id}. Waiting for reconnection...")
     # Wait 15 seconds for reconnection
     await asyncio.sleep(15)
     
@@ -80,14 +116,14 @@ async def handle_disconnection(match_id: str, player_id: str):
                     winner = "TIGER"
                 
                 if winner:
-                    print(f"Player {player_id} timed out. {winner} wins by forfeit.")
+                    logger.info(f"Player {player_id} timed out. {winner} wins by forfeit.")
                     game.state.winner = winner
                     game.state.winReason = "OPPONENT_DISCONNECTED"
                     game.state.phase = "GAME_OVER"
                     process_game_result(game)
                     await manager.broadcast(match_id, jsonable_encoder(game.state))
     else:
-        print(f"Player {player_id} reconnected to {match_id}.")
+        logger.info(f"Player {player_id} reconnected to {match_id}.")
 
 class MatchmakingQueue:
     def __init__(self):
@@ -102,12 +138,12 @@ class MatchmakingQueue:
              pass
              
         self.queue.append({"websocket": websocket, "playerId": player_id})
-        print(f"Player {player_id} added to matchmaking queue. Queue size: {len(self.queue)}")
+        logger.info(f"Player {player_id} added to matchmaking queue. Queue size: {len(self.queue)}")
         await self.check_match()
 
     def remove_player(self, websocket: WebSocket):
         self.queue = [p for p in self.queue if p["websocket"] != websocket]
-        print(f"Player removed from matchmaking queue. Queue size: {len(self.queue)}")
+        logger.info(f"Player removed from matchmaking queue. Queue size: {len(self.queue)}")
 
     async def check_match(self):
         if len(self.queue) >= 2:
@@ -120,7 +156,7 @@ class MatchmakingQueue:
             game.state.goatPlayerId = player2["playerId"]
             games[game.state.matchId] = game
             
-            print(f"Match found! {game.state.matchId}: {player1['playerId']} vs {player2['playerId']}")
+            logger.info(f"Match found! {game.state.matchId}: {player1['playerId']} vs {player2['playerId']}")
 
             # Notify Player 1
             try:
@@ -131,7 +167,7 @@ class MatchmakingQueue:
                 })
                 await player1["websocket"].close()
             except Exception as e:
-                print(f"Error notifying player 1: {e}")
+                logger.error(f"Error notifying player 1: {e}")
 
             # Notify Player 2
             try:
@@ -142,7 +178,7 @@ class MatchmakingQueue:
                 })
                 await player2["websocket"].close()
             except Exception as e:
-                print(f"Error notifying player 2: {e}")
+                logger.error(f"Error notifying player 2: {e}")
 
 matchmaking_queue = MatchmakingQueue()
 
